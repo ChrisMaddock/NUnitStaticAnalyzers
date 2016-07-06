@@ -9,7 +9,7 @@ namespace RegexAnalyzer
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class SetUpAttributeAnalyzer : DiagnosticAnalyzer
     {
-        private const string DiagnosticId = "SetUpAttributeAnalyzer";
+        internal const string DiagnosticId = "SetUpAttributeAnalyzer";
         private const string Title = "SetUpAttribute has errors";
         private const string MessageFormat = "Method '{0}' with SetUpAttribute must be public";
         private const string Description = "Methods with SetUpAttribute must be public";

@@ -41,6 +41,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="SetUpAttributeAnalyser.cs" />
+    <Compile Include="SetUpCodeFixProvider.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources.resx">
