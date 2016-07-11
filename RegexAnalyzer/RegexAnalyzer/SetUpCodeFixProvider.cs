@@ -9,14 +9,15 @@ using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Rename;
 
 namespace RegexAnalyzer
 {
-    [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(RegexAnalyzerCodeFixProvider)), Shared]
+    [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(SetUpCodeFixProvider)), Shared]
     public class SetUpCodeFixProvider : CodeFixProvider
     {
         private const string Title = "Make public";
+
+        private readonly SyntaxToken _whitespaceToken = SyntaxFactory.Token(SyntaxTriviaList.Create(SyntaxFactory.Space), SyntaxKind.StringLiteralToken, SyntaxTriviaList.Empty);
 
         public override ImmutableArray<string> FixableDiagnosticIds
         {
@@ -42,53 +43,34 @@ namespace RegexAnalyzer
 
             // Register a code action that will invoke the fix.
             context.RegisterCodeFix(
-                CodeAction.Create(
-                    title: Title,
-                    createChangedSolution: c => MakePublicAsync(context.Document, declaration, c),
-                    equivalenceKey: Title),
+                CodeAction.Create(Title, 
+                                  c => ReplacePropertyModifierAsync(context.Document, declaration, SyntaxKind.PublicKeyword, c),
+                                  Title),
                 diagnostic);
         }
 
-        private static async Task<Solution> MakePublicAsync(Document document, MethodDeclarationSyntax typeDecl, CancellationToken cancellationToken)
+        private async Task<Document> ReplacePropertyModifierAsync(Document document, MethodDeclarationSyntax method, SyntaxKind methodModifier, CancellationToken cancellationToken)
         {
-            typeDecl.WithModifiers(SyntaxKind.PublicKeyword);
+            var previousWhiteSpacesToken = SyntaxFactory.Token(method.GetLeadingTrivia(), SyntaxKind.StringLiteralToken, SyntaxTriviaList.Empty);
 
-            // Compute new uppercase name.
-            var identifierToken = typeDecl.Identifier;
-            var newName = identifierToken.Text.ToUpperInvariant();
+            var newProperty = method.WithModifiers(SyntaxTokenList.Create(previousWhiteSpacesToken)
+            .Add(SyntaxFactory.Token(methodModifier))
+            .Add(_whitespaceToken));
 
-            // Get the symbol representing the type to be renamed.
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            var typeSymbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken);
+            if (method.Modifiers.Any(m => m.Kind() == SyntaxKind.VirtualKeyword))
+            {
+                newProperty = newProperty.AddModifiers(SyntaxFactory.Token(SyntaxKind.VirtualKeyword), _whitespaceToken);
+            }
 
-            // Produce a new solution that has all references to that type renamed, including the declaration.
-            var originalSolution = document.Project.Solution;
-            var optionSet = originalSolution.Workspace.Options;
-            var newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, typeSymbol, newName, optionSet, cancellationToken).ConfigureAwait(false);
-
-            // Return the new solution with the now-uppercase type name.
-            return newSolution;
+            return await ReplacePropertyInDocumentAsync(document, method, newProperty, cancellationToken);
         }
 
-        private static async Task<Solution> MakePublicAsync(Document document, MethodDeclarationSyntax typeDecl, CancellationToken cancellationToken)
+        private static async Task<Document> ReplacePropertyInDocumentAsync(Document document, MethodDeclarationSyntax method, MethodDeclarationSyntax newMethod, CancellationToken cancellationToken)
         {
-            typeDecl.WithModifiers(SyntaxKind.PublicKeyword);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            var newRoot = root.ReplaceNode(method, new[] { newMethod });
 
-            // Compute new uppercase name.
-            var identifierToken = typeDecl.Identifier;
-            var newName = identifierToken.Text.ToUpperInvariant();
-
-            // Get the symbol representing the type to be renamed.
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            var typeSymbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken);
-
-            // Produce a new solution that has all references to that type renamed, including the declaration.
-            var originalSolution = document.Project.Solution;
-            var optionSet = originalSolution.Workspace.Options;
-            var newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, typeSymbol, newName, optionSet, cancellationToken).ConfigureAwait(false);
-
-            // Return the new solution with the now-uppercase type name.
-            return newSolution;
+            return document.WithSyntaxRoot(newRoot);
         }
     }
 }
